@@ -1,0 +1,35 @@
+Ideia
+
+THREADS:
+Servidor:
++ Thread: Recebe mensagem e adiciona ao arquivo/memoria compartilhada
++ Thread: Envia para cada cliente informações do estado da conversa
+
+
+Cliente:
++ Thread: Caso o usuario coloque input, envia-lo para o servidor
++ Thread: Recebe mensagem do servidor e coloca na tela do usuario
+
+
+SEQUENCIAL:
+
+
+Servidor:
++ Fica esperando receber mensagem
++ Apos receber mensagem envia a informação para os clientes
+
+Cliente:
++ Aguarda cliente escrever e enviar mensagem
++ Apos isso espera mensagem do servidor e coloca na tela do usuario
++ Volta a aguardar o usuario
+
+
+OBS.: mensagem seria escrever em algum arquivo especifico ou variavel (?)
+
+Bônus: O Lab vale 13 para quem acrescentar a seguinte tarefa:
+Faça a versão sequencial do mesmo programa e compare as duas execuções para verificar
+se valeu a pena neste cenario a implementação multithread.Seria conveniente alguma
+medida de tempo de execução.
+
+???(como fazer medida de tempo de execução)
+
