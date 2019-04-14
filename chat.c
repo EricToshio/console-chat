@@ -5,8 +5,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+
 #define TRUE 1
 #define FALSE 0
+
+#define NUMBER_OF_CLIENTS 2
+#define BUG_VERSION TRUE
 
 #define N 10
 #define WINAPI
@@ -18,6 +22,7 @@ typedef void *LPVOID;
 
 // lista ligada
 // -----------------------------------------
+int created_blocks;
 struct noh {
 	int id;
 	char message[100];
@@ -32,18 +37,20 @@ struct noh* add_noh(int id, char* message, struct noh* last_noh) {
 	new->id = id;
 	strcpy(new->message,message);
 	if(last_noh != last){
-		printf("<<<<<<<<<< mensagem perdida >>>>>>>>>>>>\n");
+		printf("<<<<<<<<<<<<<>>>>>>>>>>>>\n");
+		printf("usuario %d usou uma versao desatualizada da lista\n",id);
 	}
 	last_noh->next = new;
 	last_noh = new;
+	created_blocks++;
 	return last_noh;
 }
 // -----------------------------------------
 
 
 // Funcoes e variaveis das threads
-pthread_cond_t handleThread[2];
-pthread_t threadId[2];
+pthread_cond_t handleThread[NUMBER_OF_CLIENTS+1];
+pthread_t threadId[NUMBER_OF_CLIENTS+1];
 
 sem_t mutex; //pthread_cond_t mutex;
 sem_t mutex_auditor;
@@ -63,93 +70,91 @@ void _down(sem_t *sem, const char * name) {
 	// debug("Down %s complete!",name);
 }
 
-int messagesSent1, messagesSent2;
+int messagesSent[NUMBER_OF_CLIENTS];
+int index_available;
 
-unsigned long WINAPI client1( LPVOID lpParam ) {
-	debugtxt("Usuario 1 conectado");
+unsigned long WINAPI client( LPVOID lpParam ) {
+	int id = (int) pthread_self();
+	int index;
+	down(&mutex);
+	  index = index_available++;
+	  messagesSent[index] = 0;
+	up(&mutex);
+	printf("Usuario %d conectado com indice %d\n", id,index);
 	char* message = "usuario 1 diz: hello world!";
-	int id = 1;
 	while(TRUE) {
 		sleep(1);
 		down(&mutex_auditor);
 		up(&mutex_auditor);
-			// down(&mutex);
-		last = add_noh(id, message, last);
-		messagesSent1++;
-			// up(&mutex);
+		if(!BUG_VERSION)
+			down(&mutex);
+		last = add_noh(index, message, last);
+		messagesSent[index]++;
+		if(!BUG_VERSION)
+			up(&mutex);
 	}
-	// debugtxt("Ending producer");
-	return 0;
-}
-
-unsigned long WINAPI client2( LPVOID lpParam ) {
-	debugtxt("Usuario 2 conectado");
-	char* message = "usuario 2 diz: hello world!";
-	int id = 2;
-	while(TRUE) {
-		sleep(1);
-		down(&mutex_auditor);
-		up(&mutex_auditor);
-			// down(&mutex);
-		last = add_noh(id, message, last);
-		messagesSent2++;
-			// up(&mutex);
-	}
-	debugtxt("Ending producer");
 	return 0;
 }
 
 unsigned long WINAPI auditor( LPVOID lpParam ) {
-	debugtxt("Auditor online");
-	int cont1 = 0;
-	int cont2 = 0;
+	printf("Auditor online\n");
+	int cont[NUMBER_OF_CLIENTS];
+	int i;
+	int blocks;
 	while(TRUE) {
 		sleep(3);
 		down(&mutex_auditor);
 		down(&mutex);
+		for(i=0;i<NUMBER_OF_CLIENTS;i++) cont[i] = 0;
+		blocks = 0;
 		struct noh* per = head.next;
 		while(per != NULL){
-			if(per->id == 1)
-				cont1++;
-			else
-				cont2++;
+			cont[per->id]++;
 			per = per->next;
+			blocks++;
 		}
-		printf("-------------------------------------------------------\n");
+		printf("-----------------------auditoria-----------------------------\n");
 		printf("Auditoria:\n");
-		printf("mensagens que o usuario 1 diz ter enviado: %d\n", messagesSent1);
-		printf("mensagens que a auditoria encontrou      : %d\n", cont1);
-		printf("mensagens que o usuario 2 diz ter enviado: %d\n", messagesSent2);
-		printf("mensagens que a auditoria encontrou      : %d\n", cont2);
-		cont1 = 0;
-		cont2 = 0;
+		for(i=0;i<NUMBER_OF_CLIENTS;i++){
+			printf("mensagens que o usuario %d diz ter enviado: %d\n",i, messagesSent[i]);
+			printf("mensagens que a auditoria encontrou      : %d\n", cont[i]);
+		}
+		printf("blocos que foram criados : %d\n",created_blocks);
+		printf("blocos presentes na lista: %d\n",blocks);
+		printf("--------------------------fim--------------------------------\n");
+		
 		up(&mutex);
 		up(&mutex_auditor);
 		// up(&mutex);
 	}
-	debugtxt("Ending producer");
 	return 0;
 }
 
 int main() {
-	messagesSent1 = 0;
-	messagesSent1 = 0;
+	index_available = 0;
+	created_blocks = 0;
 	head.next = NULL;
 	last = &head;
 	sem_init (&mutex, 0, 1);
 	sem_init (&mutex_auditor,0,1);
 	
-	void *threadFunc[3] = { client1, client2, auditor };
 	int i;
-	   for(i=0;i<3;i++) {
-			pthread_create (&threadId[i],
-					NULL,
-					threadFunc[i],
-					NULL);
-	   }
+	void* threadFunc[NUMBER_OF_CLIENTS+1];
+	for(i=0;i<NUMBER_OF_CLIENTS;i++) threadFunc[i] = client;
+	threadFunc[NUMBER_OF_CLIENTS] = auditor;
+	for(i=0;i<NUMBER_OF_CLIENTS;i++) {
+		pthread_create (&threadId[i],
+				NULL,
+				threadFunc[i],
+				NULL);
+	}
+	pthread_create (&threadId[NUMBER_OF_CLIENTS],
+				NULL,
+				threadFunc[NUMBER_OF_CLIENTS],
+				NULL);
 
-	   for(i=0;i<2;i++) {
-			pthread_join (threadId[i], NULL);		
-	   }
+	for(i=0;i<NUMBER_OF_CLIENTS+1;i++) {
+		pthread_join (threadId[i], NULL);		
+	}
 	
 }
