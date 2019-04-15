@@ -1,0 +1,3 @@
+1) Usando um arquivo tambem ocorre erro de sobrescrita => mesmo efeito que usar uma variavel compartilhada
+
+2) compilar o server.cpp usando g++

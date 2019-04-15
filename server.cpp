@@ -1,44 +1,187 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <semaphore.h>
+#include <unistd.h>
 #include <iostream>
-/* C++ 
-#include <iostream>
-#include <thread>        
-#include <mutex>         
-#include <condition_variable>
-*/
+#include <string>
 
-sem_t full;
-sem_t empty;
-sem_t mutex;
 
-using namespace std;
+// -----------------------------------------
+// Configuracoes
+// -----------------------------------------
 
+// Configiracao do teste
+#define NUMBER_OF_CLIENTS 2
+
+// Configuracao do servidor
+#define MAX_NUMBER_OF_CLIENTS 1000
+#define SYNCHRONISM true
+
+// Funcoes e variaveis das threads
+pthread_t threadId[MAX_NUMBER_OF_CLIENTS+2];
+sem_t mutex; 
+sem_t mutex_auditor;
+void up(sem_t *sem) {sem_post(sem);}
+void down(sem_t *sem) {sem_wait(sem);}
+
+
+int messagesSent[NUMBER_OF_CLIENTS];
+int index_available;
+
+// -----------------------------------------
+// lista ligada de mensagens 
+// -----------------------------------------
+int created_blocks;
+struct noh {
+	int id;
+	std::string message;
+	struct noh* next;
+} head;
+
+struct noh* last;
+
+struct noh* add_noh(int id, std::string message, struct noh* last_noh) {
+	struct noh* new_noh = new noh;
+	new_noh->next = NULL;
+	new_noh->id = id;
+	new_noh->message = message;
+	if(last_noh != last){
+		printf("<<<<<<<<<<<<<>>>>>>>>>>>>\n");
+		printf("usuario %d usou uma versao desatualizada da lista\n",id);
+	}
+	last_noh->next = new_noh;
+	last_noh = new_noh;
+	created_blocks++;
+	return last_noh;
+}
+// -----------------------------------------
+// Classe servidor
+// -----------------------------------------
+class Server
+{
+public:
+	
+	Server();
+	// Fucoes das threads
+	static void *auditor( void *arg );
+	static void *client(void *arg );
+	static void *server_console_control(void *arg);
+	
+};
+// -----------------------------------------
+// MAIN
+// -----------------------------------------
 int main(int argc, char const *argv[])
 {
-	int i;
-
-	last_produced_item = 0;
-	start = 0;
-	end = 0;
-
-	sem_init (&full, 0, 0);
-	sem_init (&empty, 0, N);
-	sem_init (&mutex, 0, 1);
-	
-	void *threadFunc[2] = { producerFunc, consumerFunc };
-
-	for(i=0;i<2;i++) {
-		pthread_create (&threadId[i],
-		NULL,
-		threadFunc[i],
-		NULL);
-	}
-
-	for(i=0;i<2;i++) {
-		pthread_join (threadId[i], NULL);       
-	}
-
+	Server server;
 	return 0;
 }
+// -----------------------------------------
+// Funcoes da classe servidor
+// -----------------------------------------
+// Construtor
+Server::Server()
+{	
+	index_available = 0;
+	created_blocks = 0;
+	head.next = NULL;
+	last = &head;
+	sem_init (&mutex, 0, 1);
+	sem_init (&mutex_auditor,0,1);
+	
+	int i;
+
+	for(i=0;i<NUMBER_OF_CLIENTS;i++) {
+		pthread_create (&threadId[i],NULL,client,NULL);
+	}
+
+	pthread_create (&threadId[NUMBER_OF_CLIENTS],NULL,auditor,NULL);	
+
+	pthread_create (&threadId[NUMBER_OF_CLIENTS+1],NULL,server_console_control,NULL);
+
+
+	for(i=0;i<NUMBER_OF_CLIENTS+1;i++) {
+		pthread_join (threadId[i], NULL);		
+	}
+}
+
+
+void* Server::server_console_control(void *arg)
+{
+	std::string command;
+	while(true){
+		std::cin >> command;
+		
+		if(command == "help"){
+			std::cout << "Comandos que podem ser executado" << std::endl;
+			std::cout << "show: mostra situacao atual do servidor" << std::endl;
+		}else if (command == "show"){
+			//pthread_create (&threadId[NUMBER_OF_CLIENTS],NULL,auditor,NULL);	
+		}else{
+			std::cout << "Comando nao encontrado, para comandos validos digite \"help\"" << std::endl;
+		}
+	}
+ 	
+}
+
+
+void* Server::auditor( void *arg ) {
+	printf("Auditor online\n");
+	int cont[NUMBER_OF_CLIENTS];
+	int i;
+	int blocks;
+
+	while(true) {
+		sleep(3);
+		down(&mutex_auditor);
+		down(&mutex);
+		for(i=0;i<NUMBER_OF_CLIENTS;i++) cont[i] = 0;
+		blocks = 0;
+		struct noh* per = head.next;
+		while(per != NULL){
+			cont[per->id]++;
+			per = per->next;
+			blocks++;
+		}
+		printf("-----------------------auditoria-----------------------------\n");
+		printf("Auditoria:\n");
+		for(i=0;i<NUMBER_OF_CLIENTS;i++){
+			printf("mensagens que o usuario %d diz ter enviado: %d\n",i, messagesSent[i]);
+			printf("mensagens que a auditoria encontrou      : %d\n", cont[i]);
+		}
+		printf("blocos que foram criados : %d\n",created_blocks);
+		printf("blocos presentes na lista: %d\n",blocks);
+		printf("--------------------------fim--------------------------------\n");
+		
+		up(&mutex);
+		up(&mutex_auditor);
+	}
+	
+}
+
+void* Server::client( void *arg) {
+	int id = (int) pthread_self();
+	int index;
+
+	if(SYNCHRONISM)
+		down(&mutex);
+	  index = index_available++;
+	  messagesSent[index] = 0;
+	if(SYNCHRONISM)
+		up(&mutex);
+
+	std::cout << "Usuario " << id << " conectado com indice " << index << std::endl;
+	std::string message = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla auctor eu erat ut porta. In feugiat turpis auctor elit laoreet accumsan. Interdum et malesuada fames ac ante ipsum primis in faucibus.";
+	while(true) {
+		sleep(1);
+		if(SYNCHRONISM)
+			down(&mutex);
+		last = add_noh(index, message, last);
+		messagesSent[index]++;
+		if(SYNCHRONISM)
+			up(&mutex);
+	}
+	return 0;
+}
+
+
