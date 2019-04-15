@@ -17,7 +17,7 @@
 
 // Configuracao do servidor
 #define MAX_NUMBER_OF_CLIENTS 1000
-#define SYNCHRONISM true
+#define SYNCHRONISM false
 
 // Funcoes e variaveis das threads
 pthread_t threadId[MAX_NUMBER_OF_CLIENTS+2];
@@ -105,14 +105,27 @@ void Server::test()
 	time_atual = time(NULL);
 
 	for(i=0;i<NUMBER_OF_CLIENTS;i++) {
-		pthread_create (&threadId[i],NULL,client,NULL);
+		pthread_create (&threadId[i],NULL,client_send_message,NULL);
 	}
 	for(i=0;i<NUMBER_OF_CLIENTS;i++) {
 		pthread_join (threadId[i], NULL);		
 	}
 
 	time_atual = time(NULL)- time_atual;
+
+	down(&mutex);
+	down(&mutex_auditor);
+
+	int blocks = 0;
+	struct noh* per = head.next;
+	while(per != NULL){
+		per = per->next;
+		blocks++;
+	}
+	up(&mutex);
+	up(&mutex_auditor);
 	std::cout << "Demorou " << time_atual << " segundos" << std::endl;
+	std::cout << "Existem " << blocks << " mensagens na lista" << std::endl;
 }
 
 void Server::infinite_execution(){
@@ -172,10 +185,10 @@ void* Server::auditor( void *arg ) {
 		}
 		printf("-----------------------auditoria-----------------------------\n");
 		printf("Auditoria:\n");
-		for(i=0;i<NUMBER_OF_CLIENTS;i++){
-			printf("mensagens que o usuario %d diz ter enviado: %d\n",i, messagesSent[i]);
-			printf("mensagens que a auditoria encontrou      : %d\n", cont[i]);
-		}
+		//for(i=0;i<NUMBER_OF_CLIENTS;i++){
+		//	printf("mensagens que o usuario %d diz ter enviado: %d\n",i, messagesSent[i]);
+		//	printf("mensagens que a auditoria encontrou      : %d\n", cont[i]);
+		//}
 		printf("blocos que foram criados : %d\n",created_blocks);
 		printf("blocos presentes na lista: %d\n",blocks);
 		printf("--------------------------fim--------------------------------\n");
@@ -226,7 +239,9 @@ void* Server::client_send_message( void *arg) {
 	//std::cout << "Usuario " << id << " conectado com indice " << index << std::endl;
 	std::string message = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla auctor eu erat ut porta. In feugiat turpis auctor elit laoreet accumsan. Interdum et malesuada fames ac ante ipsum primis in faucibus.";
 	for(int i = 0; i < NUMBER_OF_MESSAGES_FOR_CLIENT; i++) {
-		//sleep(1);
+		sleep(1);
+		down(&mutex_auditor);
+		up(&mutex_auditor);
 		if(SYNCHRONISM)
 			down(&mutex);
 		last = add_noh(index, message, last);
