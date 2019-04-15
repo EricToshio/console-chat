@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <iostream>
 #include <string>
+#include <ctime>
 
 
 // -----------------------------------------
@@ -12,6 +13,7 @@
 
 // Configiracao do teste
 #define NUMBER_OF_CLIENTS 2
+#define NUMBER_OF_MESSAGES_FOR_CLIENT 100
 
 // Configuracao do servidor
 #define MAX_NUMBER_OF_CLIENTS 1000
@@ -62,9 +64,12 @@ class Server
 public:
 	
 	Server();
+	void test();
+	void infinite_execution();
 	// Fucoes das threads
 	static void *auditor( void *arg );
 	static void *client(void *arg );
+	static void *client_send_message(void *arg );
 	static void *server_console_control(void *arg);
 	
 };
@@ -74,6 +79,7 @@ public:
 int main(int argc, char const *argv[])
 {
 	Server server;
+	server.test();
 	return 0;
 }
 // -----------------------------------------
@@ -88,7 +94,29 @@ Server::Server()
 	last = &head;
 	sem_init (&mutex, 0, 1);
 	sem_init (&mutex_auditor,0,1);
-	
+}
+
+// Teste para comparação com o sequencial
+void Server::test()
+{
+	int i;
+	time_t time_atual;
+
+	time_atual = time(NULL);
+
+	for(i=0;i<NUMBER_OF_CLIENTS;i++) {
+		pthread_create (&threadId[i],NULL,client,NULL);
+	}
+	for(i=0;i<NUMBER_OF_CLIENTS;i++) {
+		pthread_join (threadId[i], NULL);		
+	}
+
+	time_atual = time(NULL)- time_atual;
+	std::cout << "Demorou " << time_atual << " segundos" << std::endl;
+}
+
+void Server::infinite_execution(){
+
 	int i;
 
 	for(i=0;i<NUMBER_OF_CLIENTS;i++) {
@@ -104,7 +132,6 @@ Server::Server()
 		pthread_join (threadId[i], NULL);		
 	}
 }
-
 
 void* Server::server_console_control(void *arg)
 {
@@ -173,6 +200,31 @@ void* Server::client( void *arg) {
 	std::cout << "Usuario " << id << " conectado com indice " << index << std::endl;
 	std::string message = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla auctor eu erat ut porta. In feugiat turpis auctor elit laoreet accumsan. Interdum et malesuada fames ac ante ipsum primis in faucibus.";
 	while(true) {
+		sleep(1);
+		if(SYNCHRONISM)
+			down(&mutex);
+		last = add_noh(index, message, last);
+		messagesSent[index]++;
+		if(SYNCHRONISM)
+			up(&mutex);
+	}
+	return 0;
+}
+
+void* Server::client_send_message( void *arg) {
+	int id = (int) pthread_self();
+	int index;
+
+	if(SYNCHRONISM)
+		down(&mutex);
+	  index = index_available++;
+	  messagesSent[index] = 0;
+	if(SYNCHRONISM)
+		up(&mutex);
+
+	//std::cout << "Usuario " << id << " conectado com indice " << index << std::endl;
+	std::string message = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla auctor eu erat ut porta. In feugiat turpis auctor elit laoreet accumsan. Interdum et malesuada fames ac ante ipsum primis in faucibus.";
+	for(int i = 0; i < NUMBER_OF_MESSAGES_FOR_CLIENT; i++) {
 		sleep(1);
 		if(SYNCHRONISM)
 			down(&mutex);

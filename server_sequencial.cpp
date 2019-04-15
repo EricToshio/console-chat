@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <iostream>
 #include <string>
-#include <time.h>
+#include <ctime>
 
 
 // -----------------------------------------
@@ -60,11 +60,14 @@ public:
 // -----------------------------------------
 int main(int argc, char const *argv[])
 {
-	clock_t t;
-	t = clock();
+	time_t time_atual;
+
+	time_atual = time(NULL);
+
 	Server server;
-	t = clock() - t;
-	std::cout << "Demorou " << ((float)t)/CLOCKS_PER_SEC << " segundos" << std::endl;
+
+	time_atual = time(NULL)- time_atual;
+	std::cout << "Demorou " << time_atual << " segundos" << std::endl;
 	return 0;
 }
 // -----------------------------------------
