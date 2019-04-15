@@ -214,6 +214,7 @@ void* Server::client( void *arg) {
 void* Server::client_send_message( void *arg) {
 	int id = (int) pthread_self();
 	int index;
+	
 
 	if(SYNCHRONISM)
 		down(&mutex);
@@ -225,7 +226,7 @@ void* Server::client_send_message( void *arg) {
 	//std::cout << "Usuario " << id << " conectado com indice " << index << std::endl;
 	std::string message = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla auctor eu erat ut porta. In feugiat turpis auctor elit laoreet accumsan. Interdum et malesuada fames ac ante ipsum primis in faucibus.";
 	for(int i = 0; i < NUMBER_OF_MESSAGES_FOR_CLIENT; i++) {
-		sleep(1);
+		//sleep(1);
 		if(SYNCHRONISM)
 			down(&mutex);
 		last = add_noh(index, message, last);
@@ -233,7 +234,8 @@ void* Server::client_send_message( void *arg) {
 		if(SYNCHRONISM)
 			up(&mutex);
 	}
-	return 0;
+
+	return NULL;
 }
 
 
